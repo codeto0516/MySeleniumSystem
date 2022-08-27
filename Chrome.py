@@ -15,7 +15,7 @@ import os
 from pprint import pprint
 import subprocess
 
-# 変更
+# 変更b
 class Chrome:
 
     def __init__(self, *args, **kwargs):
