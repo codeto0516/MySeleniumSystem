@@ -20,101 +20,105 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 class Chrome:
 
-    def __init__(self, port=None, profile=None, headress=False, extension_path=None):
+    def __init__(self, port=9222, profile=None):
+
+        self.port = port
 
         # 起動確認
-        self.is_active = self._judge_active()
-
+        self.is_active = self._is_active()
+        
 
         print("### オプション ################################################")
         self.options = Options() #ブラウザ制御のオプション設定を読み込み
 
-        if port: self._port(port)
 
-        if profile: self._profile(profile) # プロフィールを指定
+        ### ポートを指定 ###############################
+        self._port()
+        
+        
 
+        ### プロフィールを指定 ###############################
+        if profile: self._profile(profile)
+
+        ###  ###############################
         if not self.is_active:
             self.options.add_experimental_option('detach', True) # 処理終了後ウィンドウを閉じないように
             self.options.add_experimental_option("excludeSwitches", ["enable-logging"])  # よくわからん長文をコンソールに表示させない
             
-        if headress: 
-            if self.is_active:
-                print("Chromeが起動しているためヘッドレスモードを有効にできません。再起動してください")
-            else:
-                self._headless() # ヘッドレスモードを有効にする
-                
-        if extension_path: self._extension(extension_path) # 拡張機能を読み込む
 
-        self._memory_saving() ### 省メモリ設定
+        ### 省メモリ設定 ###############################
+        self._memory_saving()
 
+
+        print(self.options.arguments)
+        print(self.options.experimental_options)
+        print("##############################################################")
 
 
     ###########################################################################################################
     ### オプション処理
     ###########################################################################################################
-
-    def _port(self, port):
-        print(f"--- [ポート] {port}")
+    ### ポート ###############################
+    def _port(self):
+        # 起動しているか確認
         if self.is_active:
-            self.options.add_experimental_option("debuggerAddress", f"127.0.0.1:{port}") # ポートから起動済みのウィンドウを指定する
+            # 既に起動している -> ポートから起動済みのウィンドウを指定する
+            self.options.add_experimental_option("debuggerAddress", f"127.0.0.1:{self.port}")
+            print(f"--- [ポート] {self.port}ポートで")
         else:
-            self.options.add_argument(f'--remote-debugging-port={port}') # ポートを指定して起動する
+            # 起動していない -> ポートを指定して起動する
+            self.options.add_argument(f'--remote-debugging-port={self.port}') 
+            print(f"--- [ポート] {self.port}ポートでChromeを起動します")
     
-    
+    ### プロフィール ###############################
     def _profile(self, profile):
-        print(f"--- [プロフィール] {profile}")
-        user_data_dir = "./user-data"
+        print(f"--- [プロフィール] {profile}を使用します")
+
+        USER_DATA_DIR = "./user-data"
 
         # user-dataフォルダがなかったら作成
-        if not os.path.exists(user_data_dir): 
-            os.mkdir(user_data_dir)
+        if not os.path.exists(USER_DATA_DIR): os.mkdir(USER_DATA_DIR)
 
-        # profileがなかったら
-        path = os.path.join(user_data_dir, profile)
-        if not os.path.exists(path): 
-            os.mkdir(path)
+        # profileがなかったらフォルダを作成
+        profile_path = os.path.join(USER_DATA_DIR, profile)
+        if not os.path.exists(profile_path): os.mkdir(profile_path)
 
-
-        self.options.add_argument(f'--user-data-dir={user_data_dir}')
+        # 設定
+        self.options.add_argument(f'--user-data-dir={USER_DATA_DIR}')
         self.options.add_argument(f'--profile-directory={profile}')
 
-
-    def _headless(self):
-        print("--- [ヘッドレスモード] True")
-        self.options.add_argument("--headless")                 # ヘッドレスモード起動
-        self.options.add_experimental_option('detach', False)   # 処理終了後webdriverを破棄する
-
-
-    def _extension(self, extension_path):
-        print(f"--- [Chrome拡張機能] {extension_path}")
-        self.options.add_argument(f'load-extension={extension_path}')
-
+    ### 省メモリ設定 ###############################
     def _memory_saving(self):
         self.options.add_argument('--no-sandbox')                 # セキュリティ対策などのchromeに搭載してある保護機能をオフにする。
         self.options.add_argument('--disable-dev-shm-usage')      # ディスクのメモリスペースを使う。
         self.options.add_argument('--remote-debugging-port=9222') # リモートデバッグフラグを立てる。
         self.options.add_argument('--start-maximized')            # 起動時にウィンドウを最大化する
-        self.options.add_argument('--disable-gpu')              # GPUハードウェアアクセラレーションを無効にする 「headlessモードで暫定的に必要なフラグ(そのうち不要になる)
-    
+        self.options.add_argument('--disable-gpu')                # GPUハードウェアアクセラレーションを無効にする 「headlessモードで暫定的に必要なフラグ(そのうち不要になる)
+        # self.options.add_argument("--blink-settings=imagesEnabled=false") # 画像の読み込みを無効化
+        # self.options.add_argument("--disable-application-cache") # キャッシュの無効化
+
 
     ###########################################################################################################
     ### ブラウザ処理
     ###########################################################################################################
 
-    # ポート9222で開いているメモリを取得する
-    @property
-    def lsof(self) -> list:
-        stdout:list = subprocess.run(['lsof', '-i:9222'], encoding='utf-8', stdout=subprocess.PIPE).stdout
+    # 指定ポートで開いているメモリを取得する
+    def _lsof(self, port) -> list:
+        stdout:list = subprocess.run(['lsof', f'-i:{port}'], encoding='utf-8', stdout=subprocess.PIPE).stdout
         return [item.split() for item in stdout.split("\n")[1:-1]]
 
+    def _kill(self, pid) -> None:
+        subprocess.run(["kill", pid]) 
+
+
     # Chromeが指定したポートで起動しているかどうか （ポート9222で開いているメモリを取得する） 
-    def _judge_active(self):
+    def _is_active(self) -> bool:
 
         # chromedriverを全部削除 Googleウィンドウだけ残す
-        [subprocess.run(["kill", item[1]]) for item in self.lsof if item[0] == "chromedri"]
+        [self._kill(process[1]) for process in self._lsof(self.port) if process[0] == "chromedri"]
 
         # もう一度lsof -i:9222をしてGoogleウィンドウがあればそのまま使う
-        if self.lsof:
+        if self._lsof(self.port):
             print("--- 既に起動しているのでそのまま継続します ---")
             return True
         else:
@@ -122,19 +126,24 @@ class Chrome:
             return False
 
     # Chromeを起動
-    def active(self):
-        caps = DesiredCapabilities.CHROME
-        caps['goog:loggingPrefs'] = {'performance': 'ALL'}
-        print("--- Chromeを起動します ---")
-        self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=self.options, desired_capabilities=caps)
+    def active(self) -> None:
+        # websocketを傍受するために追加
+        caps = DesiredCapabilities.CHROME # Chromeブラウザの設定を表すオブジェクトを作成
+        caps['goog:loggingPrefs'] = {'performance': 'ALL'} # Chromeブラウザでのパフォーマンスログの収集を有効化
+
+        # ChromeDriverがない場合は自動インストール
+        driver_path = ChromeDriverManager().install()
+
+        # Chromeを起動し、Driverを取得
+        self.driver = webdriver.Chrome(driver_path, options=self.options, desired_capabilities=caps)
         
 
     # Chromeを閉じる
-    def close(self):
+    def close(self) -> None:
         print("--- Chromeを終了します ---")
         self.driver.close()
         self.driver.quit()
 
-    def restart(self):
+    def restart(self) -> None:
         print("--- Chromemを再起動します ---")
         
