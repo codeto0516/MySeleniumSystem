@@ -104,7 +104,7 @@ class Chrome:
 
     # 指定ポートで開いているメモリを取得する
     def _lsof(self, port) -> list:
-        stdout:list = subprocess.run(['lsof', f'-i:{port}'], encoding='utf-8', stdout=subprocess.PIPE).stdout
+        stdout:list = subprocess.run(['lsof', f'-i:{port}'], encoding='utf-8', stdout=subprocess.PIPE, shell=True).stdout
         return [item.split() for item in stdout.split("\n")[1:-1]]
 
     def _kill(self, pid) -> None:
